@@ -1,4 +1,5 @@
 import polars as pl
+import os
 
 def analyze_patient_cohorts(input_file: str) -> pl.DataFrame:
     """
@@ -14,30 +15,47 @@ def analyze_patient_cohorts(input_file: str) -> pl.DataFrame:
         - patient_count: Number of patients by BMI range
         - avg_age: Mean age by BMI range
     """
-    # Convert CSV to Parquet for efficient processing
-    pl.read_csv(input_file).write_parquet("patients_large.parquet")
+    parquet_path = "patients_large.parquet"
+    # Convert CSV to Parquet for efficient processing (only once)
+    if not os.path.exists(parquet_path):
+        # Using scan_csv keeps this lazy and memory-efficient
+        pl.scan_csv(input_file).sink_parquet(parquet_path)
+
+    # Lazy query for cohort statistics
+    # First step: filter outliers and add BMI categories
+    df = (
+        pl.scan_parquet(parquet_path)
+        # Filter BMI in valid range (outliers removed)
+        .filter((pl.col("BMI") >= 10) & (pl.col("BMI") <= 60))
+        .collect()
+    )
     
-    # Create a lazy query to analyze cohorts
-    cohort_results = pl.scan_parquet("patients_large.parquet").pipe(
-        lambda df: df.filter((pl.col("BMI") >= 10) & (pl.col("BMI") <= 60))
-    ).pipe(
-        lambda df: df.select(["BMI", "Glucose", "Age"])
-    ).pipe(
-        lambda df: df.with_columns(
-            pl.col("BMI").cut(
-                breaks=[10, 18.5, 25, 30, 60],
-                labels=["Underweight", "Normal", "Overweight", "Obese"],
-                left_closed=True
-            ).alias("bmi_range")
-        )
-    ).pipe(
-        lambda df: df.groupby("bmi_range").agg([
+    # Add BMI category using a simpler string-based approach
+    # Create a new column using a simple function mapping
+    def categorize_bmi(bmi):
+        if bmi < 18.5:
+            return "Underweight"
+        elif bmi < 25:
+            return "Normal"
+        elif bmi < 30:
+            return "Overweight"
+        else:
+            return "Obese"
+            
+    df = df.with_columns(
+        pl.col("BMI").map_elements(categorize_bmi).alias("bmi_range")
+    )
+    
+    # Second step: group and aggregate
+    cohort_results = (
+        df.group_by("bmi_range")
+        .agg([
             pl.col("Glucose").mean().alias("avg_glucose"),
-            pl.count().alias("patient_count"),
+            pl.len().alias("patient_count"),
             pl.col("Age").mean().alias("avg_age")
         ])
-    ).collect(streaming=True)
-    
+    )
+
     return cohort_results
 
 def main():
