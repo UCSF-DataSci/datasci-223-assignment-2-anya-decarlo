@@ -24,10 +24,10 @@ def analyze_patient_cohorts(input_file: str) -> pl.DataFrame:
     # Define BMI categorisation with when/otherwise for compatibility with Polars ≥0.20
     def bmi_category_expr():
         return (
-            pl.when(pl.col("BMI") < 18.5).then("Underweight")
-            .when(pl.col("BMI") < 25).then("Normal")
-            .when(pl.col("BMI") < 30).then("Overweight")
-            .otherwise("Obese")
+            pl.when(pl.col("BMI") < 18.5).then(pl.lit("Underweight"))
+            .when(pl.col("BMI") < 25).then(pl.lit("Normal"))
+            .when(pl.col("BMI") < 30).then(pl.lit("Overweight"))
+            .otherwise(pl.lit("Obese"))
         )
 
     # Lazy query for cohort statistics
@@ -41,7 +41,7 @@ def analyze_patient_cohorts(input_file: str) -> pl.DataFrame:
         .group_by("bmi_range")
         .agg(
             pl.col("Glucose").mean().alias("avg_glucose"),
-            pl.count().alias("patient_count"),
+            pl.len().alias("patient_count"),
             pl.col("Age").mean().alias("avg_age"),
         )
         .collect(streaming=True)
