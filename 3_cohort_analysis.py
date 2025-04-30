@@ -30,14 +30,21 @@ def analyze_patient_cohorts(input_file: str) -> pl.DataFrame:
         .collect()
     )
     
-    # Add BMI category using a concrete approach
-    df = df.with_columns([
-        pl.when(pl.col("BMI") < 18.5).then("Underweight")
-        .when(pl.col("BMI") < 25).then("Normal")
-        .when(pl.col("BMI") < 30).then("Overweight")
-        .otherwise("Obese")
-        .alias("bmi_range")
-    ])
+    # Add BMI category using a simpler string-based approach
+    # Create a new column using a simple function mapping
+    def categorize_bmi(bmi):
+        if bmi < 18.5:
+            return "Underweight"
+        elif bmi < 25:
+            return "Normal"
+        elif bmi < 30:
+            return "Overweight"
+        else:
+            return "Obese"
+            
+    df = df.with_column(
+        pl.col("BMI").map_elements(categorize_bmi).alias("bmi_range")
+    )
     
     # Second step: group and aggregate
     cohort_results = (
