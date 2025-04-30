@@ -42,7 +42,7 @@ def analyze_patient_cohorts(input_file: str) -> pl.DataFrame:
         else:
             return "Obese"
             
-    df = df.with_column(
+    df = df.with_columns(
         pl.col("BMI").map_elements(categorize_bmi).alias("bmi_range")
     )
     
