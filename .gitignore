@@ -1,2 +1,5 @@
 *.pyc
 .venv/
+# Large derived data
+patients_large.csv
+patients_large.parquet
